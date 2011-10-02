@@ -101,6 +101,7 @@ while True:
 
 			taille_fs += taille
 
+	#############################################################
 	# On charge le fichier en mémoire.
 	elif str.split(reponse, " ")[0] == "loadtxt":
 		fichier = str.split(reponse, " ")[1]
@@ -142,16 +143,19 @@ while True:
 		# Le système est vide au départ.
 		taille_fs = 0
 		
+	#############################################################
 	# Affichage de la liste des fichiers.
 	elif "ls" == reponse:
 		for inode in table_inodes:
 			print(str(inode[0]))
 	
+	#############################################################
 	# Affichage de la liste des fichiers en format long.
 	elif "ls -l" == reponse:
 		for inode in table_inodes:
 			print(inode[0] + "\t" + inode[1] + "\t" + str(inode[3]))
 
+	#############################################################
 	elif str.split(reponse, " ")[0] == "cat":
 		
 		fichier = str.split(reponse, " ")[1]
@@ -181,11 +185,13 @@ while True:
 			print("ERREUR: le fichier n'existe pas.")
 		
 
+	#############################################################
 	# Afficher le système de fichier tel quel.
 	elif "catfs" == reponse:
 
 		print(fs)
 
+	#############################################################
 	# Effacer un fichier dans le système de fichier.
 	elif str.split(reponse, " ")[0] == "rm":
 	
@@ -211,6 +217,7 @@ while True:
 				nouvelle_table_inodes += [inode]
 		table_inodes = nouvelle_table_inodes
 
+	#############################################################
 	# Afficher le type d'un fichier (texte ou exécutable)
 	elif str.split(reponse, " ")[0] == "file":
 		
@@ -225,6 +232,7 @@ while True:
 		# On affiche le type du fichier inscrit dans son i-node.
 		print(inode_fichier[1])
 
+	#############################################################
 	# Si on veut exécuter un fichier exécutable...
 	elif reponse[-2:] == 'py':
 

@@ -60,6 +60,7 @@ while True:
 	elif reponse == fichier:
 		reponse = fichier_source
 	
+	#############################################################
 	# On charge le fichier en mémoire.
 	elif str.split(reponse, " ")[0] == "load":
 		fichier = str.split(reponse, " ")[1]
