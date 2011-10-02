@@ -29,6 +29,8 @@ print ("Commande: \"quit\" ou \"exit\" ou \"stop\" pour quitter")
 print ("Commande: \"loadbin <fichier>\" pour charger un programme exécutable.")
 print ("Commande: \"loadtxt <fichier>\" pour charger un programme texte.")
 print ("Commande: \"mkfs <taille>\" pour créer un disque virtuelle.")
+print ("Commande: \"catfree\" pour afficher la liste des segments libres.")
+print ("Commande: \"blockdev <taille>\" pour modifier la taille des blocs")
 print ("Commande: \"ls\" pour la liste des fichiers dans le SGF.")
 print ("Commande: \"ls -l\" pour la liste des fichiers et leur taille resp.")
 print ("Commande: \"cat <fichier>\" pour afficher le contenu d'un fichier.")
@@ -43,14 +45,21 @@ print ("\t<nom_fichier> exécute son contenu.")
 print ("\tExécution du code par l'interpréteur Python et le résultat s'affiche.")
 print()
 
+# Fonction qui coupe une chaîne de bytes dans une longueur fixée.
+def split_len(seq, length):
+    return [seq[i:i+length] for i in range(0, len(seq), length)]
+
+
+
 # Module de sérialisation de données.
 import marshal
 
-# Système de fichier virtuelle en code binaire (type byte).
-fs = b""
+# Taille du système de fichier virtuelle avec valeur par défaut.
+taille_fs = 1024 
 
-# Taille du système de fichier virtuelle.
-taille_fs = 0
+# Système de fichier virtuelle en code binaire (type byte).
+# Une certaine taille par défaut.
+fs = b'\x00' * taille_fs
 
 # Table des inodes (des descripteurs de fichiers)
 # Un i-node est une liste contenant le nom du fichier, 
@@ -62,38 +71,16 @@ taille_fs = 0
 table_inodes = []
 
 # Table de l'espace libre (position et taille de
-# chaque bloc d'espace libre sur le disque.
-# Par exemple, [ [0, 100] ] indique que
+# chaque segment d'espace libre sur le disque.
+# Par exemple, [ (0, 100) ] indique que
 # les 100 premiers caractères binaires sont libres.
+table_segments_libres = [(0, taille_fs)]
 
+# Taille complète de l'espace libre.
+taille_segments_libres = taille_fs
 
 # Console interactive
 while True:
-	
-	# On mémorise la position de l'espace libre à chaque lecture de i-node.
-	pointeur_espace_libre = 0
-	
-	table_blocs_libres = []
-
-	# On calcule la table des blocs libres...
-	for inode in table_inodes:
-
-		debut = inode[2]
-		taille = inode[3]
-
-		# Si le fichier du i-node est après la position de l'espace libre courante...
-		if debut > pointeur_espace_libre:
-			# On ajoute l'espace libre dans la table des blocs libres...
-			table_blocs_libres = table_blocs_libres + [[pointeur_espace_libre, (debut-pointeur_espace_libre-1)]]
-
-		# On calcule la nouvelle position du pointeur d'espace libre.
-		pointeur_espace_libre = pointeur_espace_libre + taille + 1
-
-	# S'il reste de l'espace après le dernier fichier, on en tiens compte.
-	if pointeur_espace_libre < len(fs):
-		# On calcule l'espace libre jusqu'à la fin du SF.
-		table_blocs_libres = table_blocs_libres + [[pointeur_espace_libre, (len(fs)-pointeur_espace_libre-1)]]
-
 	
 	reponse = input('>>> ').lower()
 	if reponse == 'quit':
@@ -102,7 +89,8 @@ while True:
 		break
 	elif reponse == 'stop':
 		break
-	
+
+	#############################################################
 	# On charge le fichier en mémoire.
 	elif str.split(reponse, " ")[0] == "loadbin":
 		fichier = str.split(reponse, " ")[1]
@@ -121,21 +109,45 @@ while True:
 		# Conversion de l'objet en format byte-code.
 		reponse_byte = marshal.dumps(reponse_compilee)
 
-		if len(fs)  < taille_fs + len(reponse_byte):
+		# S'il n'y a pas assez d'espace libre...
+		if taille_segments_libres < len(reponse_byte):
 			print ("Impossible de charger le fichier")
-			print ("Le système de fichier est plein (taille = " + len(fs) + ")")
+			print ("Le système de fichier est plein ou de taille insuffisante (taille = " + len(fs) + ")")
 		else:
-			debut = taille_fs 
-			taille = int(len(reponse_byte))
+			nouv_table_segments_libres = []
 
-			# On ajoute le code dans le système de fichier.
-			fs = fs[:debut] + reponse_byte + fs[debut+taille:]
+			# Booléen indiquant si un segment a été trouvé.
+			segment_trouve = False
 
-			# On crée le i-node du fichier chargé.
-			table_inodes += [[ fichier, 'x', debut, len(reponse_byte) ]] 
+			for segment in table_segments_libres:
+				if segment[1] >= len(reponse_byte) and not segment_trouve:
+					nouv_table_segments_libres = [(segment[0] + len(reponse_byte), segment[1] - len(reponse_byte))] + nouv_table_segments_libres
+					segment_trouve = True
+					debut = segment[0] 
+					taille = int(len(reponse_byte))
 
-			taille_fs += taille
+					# On crée le i-node du fichier chargé.
+					table_inodes += [[ fichier, 'x', debut, len(reponse_byte) ]] 
 
+					# On met à jour la taille des segments libres.
+					taille_segments_libres -= len(reponse_byte)
+			
+					# On ajoute le code dans le système de fichier.
+					fs = fs[:debut] + reponse_byte + fs[debut+taille:]
+				else:
+					nouv_table_segments_libres = [segment] + nouv_table_segments_libres
+
+			# On met à jour la table des segments libres.
+			table_segments_libres = nouv_table_segments_libres
+
+			# Si aucun segment libre n'a été choisi...
+			if not segment_trouve:
+				print ("Impossible de charger le fichier")
+				print ("Le système de fichier n'a pas trouvé de segment suffisamment long.")
+			else:
+				print ("Le fichier a été chargé avec succès.")
+				
+	#############################################################
 	# On charge le fichier en mémoire.
 	elif str.split(reponse, " ")[0] == "loadtxt":
 		fichier = str.split(reponse, " ")[1]
@@ -151,22 +163,46 @@ while True:
 		# Conversion du texte en format byte-code.
 		reponse_byte = bytes(reponse, 'iso-8859-1')
 
-		# On vérifie 
-		if len(fs)  < taille_fs + len(reponse_byte):
+		# S'il n'y a pas assez d'espace libre...
+		if taille_segments_libres < len(reponse_byte):
 			print ("Impossible de charger le fichier")
-			print ("Le système de fichier est plein (taille = " + str(len(fs)) + ")")
+			print ("Le système de fichier est plein ou de taille insuffisante (taille = " + len(fs) + ")")
 		else:
-			debut = taille_fs 
-			taille = int(len(reponse_byte))
+			nouv_table_segments_libres = []
 
-			# On ajoute le code dans le système de fichier.
-			fs = fs[:debut] + reponse_byte + fs[debut+taille:]
+			# Booléen indiquant si un segment a été trouvé.
+			segment_trouve = False
 
-			# On crée le i-node du fichier chargé.
-			table_inodes += [[ fichier, 't', debut, len(reponse_byte) ]] 
+			for segment in table_segments_libres:
+				if segment[1] >= len(reponse_byte) and not segment_trouve:
+					nouv_table_segments_libres += [(segment[0] + len(reponse_byte), segment[1] - len(reponse_byte))]
+					segment_trouve = True
+					debut = segment[0] 
+					taille = int(len(reponse_byte))
 
-			taille_fs += taille
+					# On crée le i-node du fichier chargé.
+					table_inodes += [[ fichier, 't', debut, len(reponse_byte) ]] 
 
+					# On met à jour la taille des segments libres.
+					taille_segments_libres -= len(reponse_byte)
+			
+					# On ajoute le code dans le système de fichier.
+					fs = fs[:debut] + reponse_byte + fs[debut+taille:]
+				else:
+					nouv_table_segments_libres += [segment]
+
+			# On met à jour la table des segments libres.
+			table_segments_libres = nouv_table_segments_libres
+
+			# Si aucun segment libre n'a été choisi...
+			if not segment_trouve:
+				print ("Impossible de charger le fichier")
+				print ("Le système de fichier n'a pas trouvé de segment suffisamment long.")
+			else:
+				print ("Le fichier a été chargé avec succès.")
+		
+
+	#############################################################
 	elif str.split(reponse, " ")[0] == "mkfs":
 		
 		taille = str.split(reponse, " ")[1]
@@ -174,9 +210,19 @@ while True:
 		# Format le système de fichier contenant que des car. nuls (\x00).
 		fs = b'\x00' * int(taille)
 
-		# Le système est vide au départ.
-		taille_fs = 0
+		# Taille totale du système de fichiers.
+		taille_fs = int(taille)
+
+		# Table des blocs libres.
+		table_segments_libres = [(0, 1024)]
 		
+	#############################################################
+	elif str.split(reponse, " ")[0] == "blockdev":
+
+		taille = str.split(reponse, " ")[1]
+
+	
+	#############################################################
 	# Affichage de la liste des fichiers.
 	elif "ls" == reponse:
 		for inode in table_inodes:
@@ -187,6 +233,7 @@ while True:
 		for inode in table_inodes:
 			print(inode[0] + "\t" + inode[1] + "\t" + str(inode[3]))
 
+	#############################################################
 	elif str.split(reponse, " ")[0] == "cat":
 		
 		fichier = str.split(reponse, " ")[1]
@@ -216,11 +263,19 @@ while True:
 			print("ERREUR: le fichier n'existe pas.")
 		
 
+	#############################################################
 	# Afficher le système de fichier tel quel.
 	elif "catfs" == reponse:
 
 		print(fs)
 
+	#############################################################
+	# Afficher la liste des segments libres.
+	elif "catfree" == reponse:
+
+		print(table_segments_libres)
+
+	#############################################################
 	# Effacer un fichier dans le système de fichier.
 	elif str.split(reponse, " ")[0] == "rm":
 	
@@ -231,7 +286,6 @@ while True:
 			if inode[0] == fichier:
 				inode_fichier = inode
 				break
-		#inode_fichier = find(lambda inode: inode[0] == fichier, table_inodes)
 
 		debut = inode_fichier[2]
 		taille = inode_fichier[3]
@@ -246,6 +300,10 @@ while True:
 				nouvelle_table_inodes += [inode]
 		table_inodes = nouvelle_table_inodes
 
+		# On ajoute le segment devenu libre dans la table des segments.
+		table_segments_libres += [(debut, taille)]
+
+	#############################################################
 	# Afficher le type d'un fichier (texte ou exécutable)
 	elif str.split(reponse, " ")[0] == "file":
 		
@@ -260,6 +318,7 @@ while True:
 		# On affiche le type du fichier inscrit dans son i-node.
 		print(inode_fichier[1])
 
+	#############################################################
 	# Afficher la position du inode dans la liste des inodes.
 	elif str.split(reponse, " ")[0] == "stat":
 		fichier = str.split(reponse, " ")[1]
@@ -271,11 +330,13 @@ while True:
 				position += 1
 		print("i-node: " + str(position))
 
+	#############################################################
 	# Afficher la taille maximale du disque virtelle et la taille de l'espace libre.
 	elif "df" == reponse:
 		print("Taille maximale: " + str(len(fs)) + " caractères binaires.")
-		print("Espace libre disponible: " + str(len(fs) - taille_fs) + " caractères binaires.")
+		print("Espace libre disponible: " + str(taille_segments_libres) + " caractères binaires.")
 	
+	#############################################################
 	# Si on veut exécuter un fichier exécutable...
 	elif reponse[-2:] == 'py':
 
@@ -303,6 +364,7 @@ while True:
 		else:
 			print("ERREUR: le fichier n'existe pas.")
 
+	#############################################################
 	elif "defrag" == reponse:
 
 		# Nouvelle table des inodes.
@@ -316,19 +378,19 @@ while True:
 			taille = inode[3]
 
 			# Nouvelle table des espaces libres
-			nouv_table_blocs_libres = []
+			nouv_table_segments_libres = []
 
-
-			# Booléen informant s'il y a déplacement.
-			deplacement = False
 			
 			# On parcourt la liste des segments libres...
-			for segment in table_blocs_libres:
+			for segment in table_segments_libres:
 				taille_libre = segment[1]
 				position_libre = segment[0]
 
+				# Booléen qui indique qu'il y a eu déplacement.
+				deplacement = False
+
 				# Si la taille du fichier est plus petite que celle de l'espace libre, on déplace le fichier
-				if taille <= taille_libre and not deplacement and position_libre < debut:
+				if taille <= taille_libre and position_libre < debut and not deplacement:
 
 					# Le déplacement se fait ici.
 					deplacement = True
@@ -336,29 +398,29 @@ while True:
 					# On déplace le fichier.	
 					fs = fs[:position_libre] + fs[debut:debut+taille] + fs[position_libre+taille:position_libre+taille_libre-taille] + b'\x00' * taille + fs[debut+taille:]
 					# Nouvelle table des blocs libres
-					nouv_table_blocs_libres = nouv_table_blocs_libres + [[position_libre+taille, taille_libre-taille]]
+					nouv_table_segments_libres += [[position_libre+taille, taille_libre-taille]]
 
 					# On définit le nouveau i-node puisque le fichier a été modifié.
 					nouv_inode = [position_libre+1, taille]
-					
+
 				else:
 					# Le segment libre n'a pas changé.
-					nouv_table_blocs_libres = nouv_table_blocs_libres + [segment]
+					nouv_table_segments_libres += [segment]
 
 					# Le i-node n'a pas changé puisque le fichier n'a pas été modifié.
 					nouv_inode = inode
 
 			# On recrée la table des i-nodes.
-			nouv_table_inodes = nouv_table_inodes + [nouv_inode]
+			nouv_table_inodes += [nouv_inode]
 
 			# La table des espaces libres est mise à jour.
-			table_blocs_libres = nouv_table_blocs_libres
+			table_segments_libres = nouv_table_segments_libres
 
 		# On redéfinit la table des inodes.
 		table_inodes = nouv_table_inodes
 
 		
-		print ("Table blocs libres: " + str(table_blocs_libres))
+		print ("Table segments libres: " + str(table_segments_libres))
 
 	else:
 		try:
