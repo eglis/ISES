@@ -30,7 +30,6 @@ print ("Commande: \"loadbin <fichier>\" pour charger un programme exécutable.")
 print ("Commande: \"loadtxt <fichier>\" pour charger un programme texte.")
 print ("Commande: \"mkfs <taille>\" pour créer un disque virtuelle.")
 print ("Commande: \"catfree\" pour afficher la liste des segments libres.")
-print ("Commande: \"blockdev <taille>\" pour modifier la taille des blocs")
 print ("Commande: \"ls\" pour la liste des fichiers dans le SGF.")
 print ("Commande: \"ls -l\" pour la liste des fichiers et leur taille resp.")
 print ("Commande: \"cat <fichier>\" pour afficher le contenu d'un fichier.")
@@ -44,11 +43,6 @@ print ("Commande: \"defrag\" pour défragmenter le disque virtuel.")
 print ("\t<nom_fichier> exécute son contenu.")
 print ("\tExécution du code par l'interpréteur Python et le résultat s'affiche.")
 print()
-
-# Fonction qui coupe une chaîne de bytes dans une longueur fixée.
-def split_len(seq, length):
-    return [seq[i:i+length] for i in range(0, len(seq), length)]
-
 
 
 # Module de sérialisation de données.
@@ -216,12 +210,6 @@ while True:
 		# Table des blocs libres.
 		table_segments_libres = [(0, 1024)]
 		
-	#############################################################
-	elif str.split(reponse, " ")[0] == "blockdev":
-
-		taille = str.split(reponse, " ")[1]
-
-	
 	#############################################################
 	# Affichage de la liste des fichiers.
 	elif "ls" == reponse:
