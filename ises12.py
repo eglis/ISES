@@ -208,7 +208,7 @@ while True:
 		taille_fs = int(taille)
 
 		# Table des blocs libres.
-		table_segments_libres = [(0, 1024)]
+		table_segments_libres = [(0, int(taille))]
 		
 	#############################################################
 	# Affichage de la liste des fichiers.
@@ -386,7 +386,7 @@ while True:
 					# On déplace le fichier.	
 					fs = fs[:position_libre] + fs[debut:debut+taille] + fs[position_libre+taille:position_libre+taille_libre-taille] + b'\x00' * taille + fs[debut+taille:]
 					# Nouvelle table des blocs libres
-					nouv_table_segments_libres += [[position_libre+taille, taille_libre-taille]]
+					nouv_table_segments_libres += [(position_libre+taille, taille_libre-taille)]
 
 					# On définit le nouveau i-node puisque le fichier a été modifié.
 					nouv_inode = [position_libre+1, taille]
